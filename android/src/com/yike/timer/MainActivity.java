@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -935,6 +936,15 @@ public class MainActivity extends Activity {
             entries.sort((a, b) -> Long.compare(b.getValue(), a.getValue()));
             long longest = 1;
             for (Map.Entry<String, Long> e : entries) longest = Math.max(longest, e.getValue());
+            // 时长文本统一占同样宽度，像素柱才能拥有相同的右边界。
+            Paint valuePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            valuePaint.setTextSize(TypedValue.applyDimension(
+                    TypedValue.COMPLEX_UNIT_SP, 12, getResources().getDisplayMetrics()));
+            int valueWidth = dp(48);
+            for (Map.Entry<String, Long> e : entries) {
+                valueWidth = Math.max(valueWidth,
+                        (int) Math.ceil(valuePaint.measureText(formatDuration(e.getValue()))) + dp(2));
+            }
             for (Map.Entry<String, Long> e : entries) {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
@@ -956,9 +966,8 @@ public class MainActivity extends Activity {
 
                 TextView value = Ui.tv(this, formatDuration(e.getValue()), 12, 0xFFA9A9A9);
                 value.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-                value.setMinWidth(dp(48));
                 LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        valueWidth, ViewGroup.LayoutParams.WRAP_CONTENT);
                 vlp.leftMargin = dp(9);
                 metric.addView(value, vlp);
                 row.addView(metric);
