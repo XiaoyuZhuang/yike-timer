@@ -1,0 +1,25 @@
+# Build outputs
+android/build/
+*.apk
+*.aab
+
+# Local Android SDK and build cache
+android-sdk/
+repo.xml
+
+# Signing material — never commit
+*.keystore
+*.jks
+keystore.properties
+
+# Local screenshot workspace
+assets/raw/
+shot-*.png
+index.html
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
