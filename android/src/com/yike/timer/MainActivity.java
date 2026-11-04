@@ -578,34 +578,9 @@ public class MainActivity extends Activity {
     }
 
     private View matterChip(Models.Matter m) {
-        boolean on = m.name.equals(selectedMatter);
-        LinearLayout cell = new LinearLayout(this);
-        cell.setOrientation(LinearLayout.HORIZONTAL);
-        cell.setGravity(Gravity.CENTER_VERTICAL);
-        cell.setMinimumHeight(dp(42));
-        cell.setBackground(Ui.box(this, on ? 0xFFE6E6E6 : Color.BLACK,
-                on ? 0xFFE6E6E6 : COLOR_LINE, 1, 4));
-
-        TextView name = Ui.tv(this, m.name, 14, on ? 0xFF050505 : 0xFFD3D3D3);
-        name.setGravity(Gravity.CENTER);
-        name.setSingleLine(true);
-        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        name.setMaxWidth(dp(180));
-        name.setMinHeight(dp(42));
-        name.setPadding(dp(14), dp(6), dp(12), dp(6));
-        cell.addView(name);
-
-        View divider = new View(this);
-        divider.setBackgroundColor(on ? 0xFFC4C4C4 : 0xFF303030);
-        cell.addView(divider, new LinearLayout.LayoutParams(Math.max(1, dp(1)), dp(18)));
-
-        TextView edit = Ui.tv(this, "编辑", 11, on ? 0xFF3C3C3C : COLOR_SUBTLE);
-        edit.setGravity(Gravity.CENTER);
-        edit.setMinHeight(dp(42));
-        edit.setPadding(dp(9), 0, dp(11), 0);
-        cell.addView(edit);
-        cell.setTag(new MatterTag(m.name, m.id, false));
-        return cell;
+        TextView chip = choiceButton(m.name, m.name.equals(selectedMatter), 14);
+        chip.setTag(new MatterTag(m.name, m.id, false));
+        return chip;
     }
 
     private void renderHome() {
@@ -2375,113 +2350,87 @@ public class MainActivity extends Activity {
         focusInput(input);
     }
 
-    private void openMatterManager(String editId) {
-        Models.Matter editing = null;
+    private void openMatterManager() {
+        LinearLayout content = beginModal();
+        addDialogTitle(content, "自定义标签");
+        addDialogCopy(content, "添加后会显示在首页，可重复使用。长按首页标签可拖动排序或删除；再次点击已选中的标签可修改名称。");
+        EditText input = dialogInput(InputType.TYPE_CLASS_TEXT, "输入标签名称", 12, false);
+        content.addView(input);
+        LinearLayout actions = addDialogActions(content);
+        TextView cancel = dialogButton("取消", 0);
+        cancel.setOnClickListener(v -> closeModal());
+        actions.addView(cancel);
+        TextView add = dialogButton("添加", 1);
+        add.setOnClickListener(v -> {
+            String name = input.getText().toString().trim();
+            if (name.isEmpty()) {
+                toast("请输入标签名称");
+                return;
+            }
+            if (isMatterNameTaken(name, null)) {
+                toast("标签已存在");
+                return;
+            }
+            customMatters.add(new Models.Matter("matter-" + System.currentTimeMillis(), name));
+            persistMatters();
+            closeModal();
+            renderHome();
+        });
+        actions.addView(add);
+        focusInput(input);
+    }
+
+    private void openMatterEditor(String id) {
+        Models.Matter target = null;
         for (Models.Matter m : customMatters) {
-            if (m.id.equals(editId)) {
-                editing = m;
+            if (m.id.equals(id)) {
+                target = m;
                 break;
             }
         }
+        if (target == null) return;
+        Models.Matter matter = target;
         LinearLayout content = beginModal();
-        addDialogTitle(content, editing != null ? "修改事项" : "自定义事项");
-        addDialogCopy(content, "保存后会出现在首页，可重复使用。");
-        EditText input = dialogInput(InputType.TYPE_CLASS_TEXT, "输入事项名称", 12, false);
-        if (editing != null) input.setText(editing.name);
+        addDialogTitle(content, "修改标签");
+        addDialogCopy(content, "只修改首页显示的名称，历史记录中的旧名称保持不变。");
+        EditText input = dialogInput(InputType.TYPE_CLASS_TEXT, "输入标签名称", 12, false);
+        input.setText(matter.name);
+        input.setSelection(input.getText().length());
         content.addView(input);
-
-        LinearLayout list = new LinearLayout(this);
-        list.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        llp.topMargin = dp(16);
-        content.addView(list, llp);
-        if (customMatters.isEmpty()) {
-            list.addView(Ui.tv(this, "还没有自定义事项。", 12, 0xFF888888));
-        } else {
-            for (Models.Matter m : new ArrayList<>(customMatters)) {
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setGravity(Gravity.CENTER_VERTICAL);
-                row.setMinimumHeight(dp(46));
-                row.setBackground(new Ui.LineDrawable(this, Color.BLACK, COLOR_SOFT_LINE, 1));
-
-                TextView name = Ui.tv(this, m.name, 13, COLOR_TEXT);
-                name.setSingleLine(true);
-                name.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-                TextView edit = Ui.tv(this, "修改", 12, 0xFF888888);
-                edit.setGravity(Gravity.CENTER);
-                edit.setMinWidth(dp(38));
-                edit.setMinHeight(dp(38));
-                edit.setClickable(true);
-                edit.setOnClickListener(v -> {
-                    hapticTap();
-                    openMatterManager(m.id);
-                });
-                row.addView(edit);
-
-                TextView delete = Ui.tv(this, "删除", 12, 0xFF888888);
-                delete.setGravity(Gravity.CENTER);
-                delete.setMinWidth(dp(38));
-                delete.setMinHeight(dp(38));
-                delete.setClickable(true);
-                delete.setOnClickListener(v -> {
-                    hapticTap();
-                    customMatters.remove(m);
-                    if (m.name.equals(selectedMatter)) selectedMatter = null;
-                    persistMatters();
-                    renderHome();
-                    openMatterManager(null);
-                });
-                row.addView(delete);
-                list.addView(row, new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            }
-        }
-
         LinearLayout actions = addDialogActions(content);
-        TextView done = dialogButton("完成", 0);
-        done.setOnClickListener(v -> closeModal());
-        actions.addView(done);
+        TextView cancel = dialogButton("取消", 0);
+        cancel.setOnClickListener(v -> closeModal());
+        actions.addView(cancel);
         TextView save = dialogButton("保存", 1);
-        final String editingId = editing != null ? editing.id : null;
         save.setOnClickListener(v -> {
             String name = input.getText().toString().trim();
             if (name.isEmpty()) {
-                toast("请输入事项名称");
+                toast("请输入标签名称");
                 return;
             }
-            for (String existing : homeMatters) {
-                if (existing.equals(name)) {
-                    toast("事项已存在");
-                    return;
-                }
+            if (!name.equals(matter.name) && isMatterNameTaken(name, matter.id)) {
+                toast("标签已存在");
+                return;
             }
-            for (Models.Matter m : customMatters) {
-                if (!m.id.equals(editingId) && m.name.equals(name)) {
-                    toast("事项已存在");
-                    return;
-                }
-            }
-            if (editingId != null) {
-                for (Models.Matter m : customMatters) {
-                    if (m.id.equals(editingId)) {
-                        if (m.name.equals(selectedMatter)) selectedMatter = name;
-                        m.name = name;
-                        break;
-                    }
-                }
-            } else {
-                customMatters.add(new Models.Matter("matter-" + System.currentTimeMillis(), name));
-            }
+            if (matter.name.equals(selectedMatter)) selectedMatter = name;
+            matter.name = name;
             persistMatters();
+            closeModal();
             renderHome();
-            openMatterManager(null);
+            toast("标签已更新");
         });
         actions.addView(save);
         focusInput(input);
+    }
+
+    private boolean isMatterNameTaken(String name, String exceptId) {
+        for (String existing : homeMatters) {
+            if (existing.equals(name)) return true;
+        }
+        for (Models.Matter m : customMatters) {
+            if (!m.id.equals(exceptId) && m.name.equals(name)) return true;
+        }
+        return false;
     }
 
     private void openTimeManager() {
@@ -2675,7 +2624,7 @@ public class MainActivity extends Activity {
                     } else if (!matterMoved && matterPressed != null) {
                         MatterTag tag = matterPressed.getTag() instanceof MatterTag
                                 ? (MatterTag) matterPressed.getTag() : null;
-                        if (tag != null) handleMatterTap(tag, matterPressed, e.getRawX());
+                        if (tag != null) handleMatterTap(tag);
                     }
                     resetMatterGesture();
                     return true;
@@ -2709,24 +2658,16 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void handleMatterTap(MatterTag tag, View child, float rawX) {
+    private void handleMatterTap(MatterTag tag) {
         if (tag.add) {
             hapticTap();
-            openMatterManager(null);
+            openMatterManager();
             return;
         }
-        if (tag.id != null && child instanceof ViewGroup) {
-            ViewGroup group = (ViewGroup) child;
-            if (group.getChildCount() > 0) {
-                View edit = group.getChildAt(group.getChildCount() - 1);
-                int[] el = new int[2];
-                edit.getLocationOnScreen(el);
-                if (rawX >= el[0]) {
-                    hapticTap();
-                    openMatterManager(tag.id);
-                    return;
-                }
-            }
+        if (tag.id != null && tag.name.equals(selectedMatter)) {
+            hapticTap();
+            openMatterEditor(tag.id);
+            return;
         }
         selectedMatter = tag.name;
         hapticTap();
