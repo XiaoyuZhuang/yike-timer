@@ -151,6 +151,7 @@ public class MainActivity extends Activity {
     private FrameLayout pauseButton;
     private Ui.IconView pauseIcon;
     private FrameLayout endButton;
+    private Ui.IconView endIcon;
 
     private TextView toastView;
     private Runnable toastRunnable;
@@ -1859,7 +1860,7 @@ public class MainActivity extends Activity {
         endButton = new FrameLayout(this);
         endButton.setClickable(true);
         endButton.setContentDescription("结束");
-        Ui.IconView endIcon = new Ui.IconView(this, Ui.IconView.END);
+        endIcon = new Ui.IconView(this, Ui.IconView.END);
         endIcon.setIconColor(0xFFB9B9B9);
         FrameLayout.LayoutParams eilp = new FrameLayout.LayoutParams(dp(22), dp(22));
         eilp.gravity = Gravity.CENTER;
@@ -1901,6 +1902,7 @@ public class MainActivity extends Activity {
         countdownRoot.setVisibility(View.VISIBLE);
         countdownMatter.setText(active.matter);
         countdownSignature.setText(active.signature == null ? "" : active.signature);
+        resetPixelShift();
         nextShiftAt = System.currentTimeMillis() + shiftSeconds() * 1000L;
         lastSecond = -1;
         lastReminderUiAt = 0;
@@ -1955,6 +1957,10 @@ public class MainActivity extends Activity {
             int y = RANDOM.nextInt(7) - 3;
             shifter.setTranslationX(dp(x));
             shifter.setTranslationY(dp(y));
+            pauseIcon.setTranslationX(dp(x));
+            pauseIcon.setTranslationY(dp(y));
+            endIcon.setTranslationX(dp(x));
+            endIcon.setTranslationY(dp(y));
             nextShiftAt = now + shiftSeconds() * 1000L;
         }
     }
@@ -2090,8 +2096,7 @@ public class MainActivity extends Activity {
         closeModal();
         countdownRoot.setVisibility(View.GONE);
         mainColumn.setVisibility(View.VISIBLE);
-        shifter.setTranslationX(0);
-        shifter.setTranslationY(0);
+        resetPixelShift();
         showSystemBars();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         renderHome();
@@ -2114,6 +2119,21 @@ public class MainActivity extends Activity {
 
     private long shiftSeconds() {
         return "custom".equals(settings.shiftInterval) ? settings.shiftCustom : parseIntSafe(settings.shiftInterval, 10);
+    }
+
+    private void resetPixelShift() {
+        if (shifter != null) {
+            shifter.setTranslationX(0);
+            shifter.setTranslationY(0);
+        }
+        if (pauseIcon != null) {
+            pauseIcon.setTranslationX(0);
+            pauseIcon.setTranslationY(0);
+        }
+        if (endIcon != null) {
+            endIcon.setTranslationX(0);
+            endIcon.setTranslationY(0);
+        }
     }
 
     private void updateKeepAwake() {
@@ -2517,8 +2537,7 @@ public class MainActivity extends Activity {
         saveActive();
         countdownRoot.setVisibility(View.GONE);
         mainColumn.setVisibility(View.VISIBLE);
-        shifter.setTranslationX(0);
-        shifter.setTranslationY(0);
+        resetPixelShift();
         showSystemBars();
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         closeModal();
