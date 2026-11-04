@@ -557,6 +557,13 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         installMatterGridTouch();
 
+        TextView matterHint = Ui.tv(this, "长按拖动标签可排序或删除，再次点击可编辑", 11, 0xFF666666);
+        matterHint.setLineSpacing(0, 1.5f);
+        LinearLayout.LayoutParams mhlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        mhlp.topMargin = dp(10);
+        homeContent.addView(matterHint, mhlp);
+
         timeGrid = new Ui.GridWrapLayout(this, 4, 9, 9);
         LinearLayout.LayoutParams tg = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -578,6 +585,12 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    private void setChoiceChipSelected(TextView chip, boolean selected) {
+        chip.setTextColor(selected ? 0xFF050505 : 0xFFD3D3D3);
+        chip.setBackground(Ui.box(this, selected ? 0xFFE6E6E6 : Color.BLACK,
+                selected ? 0xFFE6E6E6 : COLOR_LINE, 1, 4));
+    }
+
     private View matterChip(Models.Matter m) {
         TextView chip = choiceButton(m.name, m.name.equals(selectedMatter), 14);
         chip.setTag(new MatterTag(m.name, m.id, false));
@@ -597,7 +610,7 @@ public class MainActivity extends Activity {
         for (Models.Matter m : customMatters) {
             matterGrid.addView(matterChip(m));
         }
-        TextView addMatter = choiceButton("自定义", false, 14);
+        TextView addMatter = choiceButton("添加", false, 14);
         addMatter.setTag(new MatterTag(null, null, true));
         matterGrid.addView(addMatter);
 
@@ -788,12 +801,30 @@ public class MainActivity extends Activity {
         recordsContent.addView(statsList, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        timelineHead = Ui.tv(this, "时间轴", 12, COLOR_SUBTLE);
+        LinearLayout timelineHeader = new LinearLayout(this);
+        timelineHeader.setOrientation(LinearLayout.HORIZONTAL);
+        timelineHeader.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams thlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         thlp.topMargin = dp(18);
         thlp.bottomMargin = dp(5);
-        recordsContent.addView(timelineHead, thlp);
+        recordsContent.addView(timelineHeader, thlp);
+
+        timelineHead = Ui.tv(this, "时间轴", 12, COLOR_SUBTLE);
+        timelineHeader.addView(timelineHead,
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView addRecord = Ui.tv(this, "+", 22, 0xFFCFCFCF);
+        addRecord.setGravity(Gravity.CENTER);
+        addRecord.setMinWidth(dp(44));
+        addRecord.setMinHeight(dp(36));
+        addRecord.setContentDescription("添加记录");
+        addRecord.setOnClickListener(v -> {
+            hapticTap();
+            openAddRecordDialog();
+        });
+        timelineHeader.addView(addRecord, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         timelineList = new LinearLayout(this);
         timelineList.setOrientation(LinearLayout.VERTICAL);
@@ -850,6 +881,167 @@ public class MainActivity extends Activity {
         for (Models.Matter m : customMatters) out.add(m.name);
         for (Models.RecordItem r : records) out.add(r.matter);
         return new ArrayList<>(out);
+    }
+
+    private void openAddRecordDialog() {
+        LinearLayout content = beginModal();
+        addDialogTitle(content, "添加记录");
+        addDialogCopy(content, "补记一条漏掉的记录，日期为 " + selectedDate + "。");
+
+        List<String> names = new ArrayList<>();
+        for (String name : allMatterNames()) {
+            if (name != null && !name.trim().isEmpty()) names.add(name);
+        }
+        if (names.isEmpty()) names.add("其他");
+        String initialMatter = !"all".equals(historyFilter) && names.contains(historyFilter)
+                ? historyFilter
+                : (names.contains(selectedMatter) ? selectedMatter : names.get(0));
+        final String[] chosenMatter = {initialMatter};
+
+        addDialogSection(content, "标签");
+        final Ui.FlowLayout labelFlow = new Ui.FlowLayout(this, 8, 8);
+        LinearLayout.LayoutParams lflp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lflp.topMargin = dp(8);
+        content.addView(labelFlow, lflp);
+        final List<TextView> labelChips = new ArrayList<>();
+        for (final String name : names) {
+            TextView chip = choiceButton(name, name.equals(chosenMatter[0]), 13);
+            labelChips.add(chip);
+            chip.setOnClickListener(v -> {
+                hapticTap();
+                chosenMatter[0] = name;
+                for (int i = 0; i < labelChips.size(); i++) {
+                    setChoiceChipSelected(labelChips.get(i), names.get(i).equals(name));
+                }
+            });
+            labelFlow.addView(chip);
+        }
+
+        List<Integer> durations = new ArrayList<>();
+        for (Integer minutes : homeTimes) {
+            if (minutes != null && minutes > 0 && !durations.contains(minutes)) durations.add(minutes);
+        }
+        for (Models.TimeChip t : customTimes) {
+            if (t.minutes > 0 && !durations.contains(t.minutes)) durations.add(t.minutes);
+        }
+        if (durations.isEmpty()) {
+            for (int minutes : Models.BASE_TIMES) durations.add(minutes);
+        }
+        final int[] chosenMinutes = {durations.get(0)};
+        final long[] startMs = {defaultManualStart(chosenMinutes[0])};
+        final boolean[] startTouched = {false};
+
+        View startGap = new View(this);
+        content.addView(startGap, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(10)));
+        final TextView startValue = recordTimeValue(clockTime(startMs[0]));
+        final TextView summary = Ui.tv(this, "", 12, 0xFF999999);
+        final Runnable updateSummary = () -> summary.setText(
+                clockTime(startMs[0]) + "–" + clockTime(startMs[0] + chosenMinutes[0] * 60000L)
+                        + " · " + chosenMinutes[0] + " 分钟");
+        addRecordTimeRow(content, "开始时间", startValue,
+                () -> pickManualRecordStart(startMs, startValue, () -> {
+                    startTouched[0] = true;
+                    updateSummary.run();
+                }));
+
+        addDialogSection(content, "时长");
+        final Ui.FlowLayout durationFlow = new Ui.FlowLayout(this, 8, 8);
+        LinearLayout.LayoutParams dflp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dflp.topMargin = dp(8);
+        content.addView(durationFlow, dflp);
+        final List<TextView> durationChips = new ArrayList<>();
+        for (final int minutes : durations) {
+            TextView chip = choiceButton(minutes + " 分钟", minutes == chosenMinutes[0], 13);
+            durationChips.add(chip);
+            chip.setOnClickListener(v -> {
+                hapticTap();
+                chosenMinutes[0] = minutes;
+                for (int i = 0; i < durationChips.size(); i++) {
+                    setChoiceChipSelected(durationChips.get(i), durations.get(i) == minutes);
+                }
+                if (!startTouched[0] && selectedDate.equals(localDate(System.currentTimeMillis()))) {
+                    startMs[0] = defaultManualStart(minutes);
+                    startValue.setText(clockTime(startMs[0]));
+                }
+                updateSummary.run();
+            });
+            durationFlow.addView(chip);
+        }
+
+        updateSummary.run();
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        slp.topMargin = dp(12);
+        content.addView(summary, slp);
+
+        LinearLayout actions = addDialogActions(content);
+        TextView cancel = dialogButton("取消", 0);
+        cancel.setOnClickListener(v -> closeModal());
+        actions.addView(cancel);
+        TextView save = dialogButton("添加", 1);
+        save.setOnClickListener(v -> {
+            long duration = chosenMinutes[0] * 60000L;
+            Models.RecordItem r = new Models.RecordItem();
+            r.id = "record-" + System.currentTimeMillis();
+            r.matter = chosenMatter[0];
+            r.start = startMs[0];
+            r.end = startMs[0] + duration;
+            r.duration = duration;
+            r.segments.add(new Models.Segment(r.start, r.end));
+            records.add(r);
+            persistRecords();
+            if (!"all".equals(historyFilter) && !historyFilter.equals(r.matter)) historyFilter = "all";
+            closeModal();
+            renderRecords();
+            toast("记录已添加");
+        });
+        actions.addView(save);
+    }
+
+    private void addDialogSection(LinearLayout content, String text) {
+        TextView t = Ui.tv(this, text, 11, 0xFF777777);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(16);
+        content.addView(t, p);
+    }
+
+    private long defaultManualStart(int minutes) {
+        long[] bounds = dayBounds(selectedDate);
+        long now = System.currentTimeMillis();
+        long start;
+        if (selectedDate.equals(localDate(now))) {
+            start = now - minutes * 60000L;
+            if (start < bounds[0]) start = bounds[0];
+        } else {
+            start = bounds[0] + 12 * 3600000L;
+        }
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(start);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
+    private void pickManualRecordStart(long[] startMs, TextView target, Runnable onChange) {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(startMs[0]);
+        TimePickerDialog dialog = new TimePickerDialog(this, android.R.style.Theme_Material_Dialog_Alert,
+                (view, hourOfDay, minute) -> {
+                    Calendar picked = Calendar.getInstance();
+                    picked.setTimeInMillis(startMs[0]);
+                    picked.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                    picked.set(Calendar.MINUTE, minute);
+                    picked.set(Calendar.SECOND, 0);
+                    picked.set(Calendar.MILLISECOND, 0);
+                    startMs[0] = picked.getTimeInMillis();
+                    target.setText(clockTime(startMs[0]));
+                    onChange.run();
+                }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true);
+        dialog.show();
     }
 
     private void renderRecords() {
@@ -2372,16 +2564,36 @@ public class MainActivity extends Activity {
 
     private void openMatterManager() {
         LinearLayout content = beginModal();
-        addDialogTitle(content, "自定义标签");
-        addDialogCopy(content, "添加后会显示在首页，可重复使用。长按首页标签可拖动排序或删除；再次点击已选中的标签可修改名称。");
+        addDialogTitle(content, "添加标签");
+        addDialogCopy(content, "可以连续添加多个，添加完成后点关闭。新标签会显示在首页。");
         EditText input = dialogInput(InputType.TYPE_CLASS_TEXT, "输入标签名称", 12, false);
+        input.setImeOptions(EditorInfo.IME_ACTION_DONE);
         content.addView(input);
+
+        final TextView addedCount = Ui.tv(this, "", 11, 0xFF777777);
+        addedCount.setVisibility(View.GONE);
+        LinearLayout.LayoutParams aclp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        aclp.topMargin = dp(14);
+        content.addView(addedCount, aclp);
+
+        final Ui.FlowLayout addedFlow = new Ui.FlowLayout(this, 7, 7);
+        addedFlow.setVisibility(View.GONE);
+        LinearLayout.LayoutParams aflp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        aflp.topMargin = dp(8);
+        content.addView(addedFlow, aflp);
+
+        final int[] added = {0};
         LinearLayout actions = addDialogActions(content);
-        TextView cancel = dialogButton("取消", 0);
-        cancel.setOnClickListener(v -> closeModal());
-        actions.addView(cancel);
+        TextView close = dialogButton("关闭", 0);
+        close.setOnClickListener(v -> {
+            closeModal();
+            renderHome();
+        });
+        actions.addView(close);
         TextView add = dialogButton("添加", 1);
-        add.setOnClickListener(v -> {
+        Runnable addMatter = () -> {
             String name = input.getText().toString().trim();
             if (name.isEmpty()) {
                 toast("请输入标签名称");
@@ -2393,10 +2605,26 @@ public class MainActivity extends Activity {
             }
             customMatters.add(new Models.Matter("matter-" + System.currentTimeMillis(), name));
             persistMatters();
-            closeModal();
             renderHome();
-        });
+            added[0]++;
+            addedCount.setVisibility(View.VISIBLE);
+            addedCount.setText("本次已添加 " + added[0] + " 个标签");
+            addedFlow.setVisibility(View.VISIBLE);
+            TextView chip = choiceButton(name, false, 12);
+            chip.setClickable(false);
+            addedFlow.addView(chip);
+            input.setText("");
+            focusInput(input);
+        };
+        add.setOnClickListener(v -> addMatter.run());
         actions.addView(add);
+        input.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                addMatter.run();
+                return true;
+            }
+            return false;
+        });
         focusInput(input);
     }
 
